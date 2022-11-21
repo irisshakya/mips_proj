@@ -1,0 +1,124 @@
+# references
+# 1. https://www.programminghomeworkhelp.com/bitmap-display-mips-assembly/
+
+.data
+# DONOTMODIFYTHISLINE
+frameBuffer: .space 0x80000 # 512 wide X 256 high pixels
+w: .word 256
+h: .word 128
+d: .word 90
+chr: .word 0x0065350F
+chg: .word 0x0000FF00
+chb: .word 0x000000FF
+cdr: .word 0x000000FF
+cdg: .word 0x0000FF00
+cdb: .word 0x0065350F
+# DONOTMODIFYTHISLINE
+# Your variables go BELOW here only
+
+.text
+
+	la	$t0, frameBuffer
+	# color
+	li	$t1, 0x00FFFF00 # color YELLOW
+	lw	$t2, chb #0x000000FF # color BLUE
+	lw	$t5, chr #0x0065350F # color BROWN
+	lw	$s0, cdr
+	lw	$s2, cdg
+	lw	$s3, cdb
+	# dimensions
+	lw	$a0, h # load height
+	lw	$a1, w # load width
+	lw	$a2, d # load door width
+	li	$t6, 256 # load imm(256) in t6
+	li	$t4, 131072 # store num of pixels total
+		# $t4 can be overridden
+	
+backGround: 
+	sw	$t1, 0($t0) 		# fill square by yellow
+	addi	$t0, $t0, 4		# incremet address by 4
+	addi	$t3, $t3, 1		# color adjacent pixel
+	beq	$t3, $t4, center_square	# check if it fills everything
+	j	backGround
+
+center_square:
+	la	$t0,  frameBuffer
+	srl	$t4, $a1, 1	# t3 <- ao/2 (width/2)
+	sub	$t4, $t6, $t4	# t3 <- 256 - (width/2)
+	sub	$t7, $t6, $a0	# t4 <- 256 - height(for box height)
+	sll	$t4, $t4, 2	# t3 <- t4 * 4 (https://people.cs.pitt.edu/~childers/CS0447/lectures/shift-operations.pdf)
+	sll	$t7, $t7, 11	# t4 <- t4 * 2048
+	add	$t4, $t4, $t7
+	add	$t0, $t0, $t4	# for new addr of t0
+	#move	$t6, $zero		# set t6 to 0
+	
+	addi	$s1, $t0, 0	# reset FB to 0 addr
+	sll	$t7, $a0, 11	# t4 <- h * ( 512*4 )
+	sub	$t7, $zero, $t7	# negate t7
+	addi	$t7, $t7, 4	# go to another pixel
+	lw	$a0, h # load height
+	#t6 is open now
+	#t4 is open
+base_box:
+	sw	$s0, 0($t0)	# store BLUE in $t0
+	addi	$t0, $t0, 2048	# $t0 <- 2048
+	addi	$a0, $a0,-1	# h--
+	bne	$a0, $zero, base_box	# if not equal, repeat
+	add	$t0, $t0, $t7	# $t0 <- t0 + t7 
+	addi	$a1, $a1, -1	# width decrement 
+	lw	$a0, h		# a0 <- h
+	bne	$a1, $zero, base_box	# loop
+	
+# door calcculations
+	lw	$a0, h		# loading a0 as h(height) value just in case again
+	srl	$t8, $a0, 1	# t8 <- a0 /2 (height/2)
+	srl	$t7, $a2, 1	#  door/2 ( has half house height )
+	lw	$a1, w		# loading width as w value 
+	srl	$t4, $a1, 1	# house width/2
+	sub	$t4, $t4, $t7	# t4 <- t4 - t7 (house_width - door_width)
+	sll	$t4, $t4, 2	# t4 <- 4 * t3 gets multiplied by 4
+	sub	$t0, $t0, $t4	# t0 get top left of blue box
+	sll	$t4, $a0, 11	# t5 < - h*(512*4)
+	add	$t0, $t0, $t4	#set FB for door
+	lw	$a2, d		# makeing sure d stays same
+	
+door:
+	sw	$s3, 0($t0)	# set color brown to FB
+	addi	$t0, $t0, -2048	# go up one row
+	addi	$t8, $t8, -1	# t1 - 1(until it get zero below)
+	bne	$t8, $zero, door
+	lw	$a0, h
+	srl	$t8, $a0, 1	# make it half a0/2
+	sll	$t4, $t8, 11	# t5 <- t8 * 2048
+	addi	$t4, $t4, -4	# go to next line
+	add	$t0, $t0, $t4	# setting up FB ( FB <- FB + t4 )
+	addi	$t7, $t7, -1	# go down one pixel
+	bne	$t7, $zero, door	# until t7 is filled up loop
+	
+	# clearing regs here
+	# https://gustavus.edu/mcs/max/courses/F2012/MCS-284/labs/lab2/rectangle.asm
+	lw	$a1, w		# setting width just in case
+	srl	$t8, $a1, 1	# divide width by half
+	addi	$t0, $t0, -2048	# 
+	li	$t6, 0		# reset t6 as 0
+	sw	$t0, 0($s1)	# load pixel address of t0 to $s1
+	addi	$t7, $s1, 0	# t7 gets addr of bottom left pixel
+	sll	$t4, $a1, 2	# t4 <- w*4
+	add	$t4, $s1, $t4	# gets bottom right pixel to stop at
+
+roof:
+	sw	$s3, 0($s1)	# color brown loaded into t6
+	addi	$s1, $s1, 4	# increment each pixel
+	bne	$s1, $t4, roof	# untill t6 == t4 continue filling pixel
+	addi	$t8, $t8, -1	# counter step
+	addi	$t7, $t7, -2044 # move up left everytime leaving one pixel gap
+	addi	$s1, $t7, 0	# t6 <- t7 ( store new pixel point )
+	addi	$t4, $t4, -2052	# move left-pixel addr by one pixel and shift righ one pixel after
+	bne	$t8, $zero, roof	# keep looping until t0 == 0
+	
+	
+exit:
+	li $v0,10 # exit code
+
+	syscall # exit to OS
+	
